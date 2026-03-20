@@ -1,47 +1,71 @@
-# Image Processor (Spring Boot + Vue + Tailwind)
+# Image Processor
 
-Веб-приложение для обработки изображений с бэкендом на Java и фронтендом на Vue.
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
+![Vue](https://img.shields.io/badge/Vue-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 
-## Что умеет приложение
+Веб-приложение для обработки изображений.
 
-1. Загружать одно или два изображения.
-2. Выполнять операции:
-   - `SUM`
-   - `MULTIPLY`
-   - `AVERAGE`
-   - `MINIMUM`
-   - `MAXIMUM`
-   - `MASK`
-3. Выбирать цветовые каналы для обработки:
-   - `RGB`
-   - `R`
-   - `G`
-   - `B`
-   - `RG`
-   - `GB`
-   - `RB`
-4. Накладывать маску (`CIRCLE`, `SQUARE`, `RECTANGLE`) по центру изображения.
-5. Сохранять результат в формате PNG.
+![Обычная обработка 2-ух картинок](src/main/resources/images/defaultPage.png)
+![Наложение маски на изображение](src/main/resources/images/defaultPageMask.png)
+![Обработка по слоям](src/main/resources/images/layeredPage.png)
+
+Стек:
+
+1. Backend: Spring Boot (Java 21)
+2. Frontend: Vue 3 + Vite + Tailwind CSS
+
+## Возможности
+
+Приложение поддерживает 2 режима работы.
+
+### 1. Обычная обработка
+
+1. Операции: `SUM`, `MULTIPLY`, `AVERAGE`, `MINIMUM`, `MAXIMUM`, `MASK`
+2. Каналы: `RGB`, `R`, `G`, `B`, `RG`, `GB`, `RB`
+3. Маска: `CIRCLE`, `SQUARE`, `RECTANGLE`
+4. Для `MASK` второе изображение не требуется
+
+### 2. Слои (аналог панели слоев)
+
+1. Изображения добавляются в список в порядке открытия
+2. Для каждого слоя задаются:
+   1. Режим наложения: `NONE`, `SUM`, `DIFFERENCE`, `MULTIPLY`, `AVERAGE`, `MINIMUM`, `MAXIMUM`
+   2. Прозрачность (0-100%)
+3. Композиция строится по списку слоев снизу вверх
+4. Размеры изображений могут быть любыми
+
+## Архитектура backend
+
+Используется слоистая структура `api / application / domain`.
+
+1. API (web): HTTP-слой
+   1. [src/main/java/by/michael/api/ImageController.java](src/main/java/by/michael/api/ImageController.java)
+   2. [src/main/java/by/michael/api/GlobalExceptionHandler.java](src/main/java/by/michael/api/GlobalExceptionHandler.java)
+   3. [src/main/java/by/michael/api/dto/ApiError.java](src/main/java/by/michael/api/dto/ApiError.java)
+2. Application: orchestration/use-cases
+   1. [src/main/java/by/michael/application/ImageProcessingService.java](src/main/java/by/michael/application/ImageProcessingService.java)
+3. Domain: чистая бизнес-логика обработки
+   1. [src/main/java/by/michael/domain/image/ImageProcessor.java](src/main/java/by/michael/domain/image/ImageProcessor.java)
+   2. [src/main/java/by/michael/domain/image/MaskFactory.java](src/main/java/by/michael/domain/image/MaskFactory.java)
+   3. [src/main/java/by/michael/domain/image/LayerComposer.java](src/main/java/by/michael/domain/image/LayerComposer.java)
+   4. [src/main/java/by/michael/domain/image/BlendMode.java](src/main/java/by/michael/domain/image/BlendMode.java)
+4. Bootstrap
+   1. [src/main/java/by/michael/Main.java](src/main/java/by/michael/Main.java)
 
 ## Структура проекта
 
-1. Бэкенд (Spring Boot): [src/main/java/by/michael](src/main/java/by/michael)
-2. Фронтенд (Vue + Vite): [frontend](frontend)
-3. Статика, которую отдает Spring: [src/main/resources/static](src/main/resources/static)
-
-Ключевые файлы:
-
-1. Точка входа Spring: [src/main/java/by/michael/Main.java](src/main/java/by/michael/Main.java)
-2. REST API: [src/main/java/by/michael/ImageController.java](src/main/java/by/michael/ImageController.java)
-3. Алгоритм обработки: [src/main/java/by/michael/ImageProcessor.java](src/main/java/by/michael/ImageProcessor.java)
-4. Генерация масок: [src/main/java/by/michael/MaskFactory.java](src/main/java/by/michael/MaskFactory.java)
-5. Сборка и автосборка фронта: [build.gradle.kts](build.gradle.kts)
+1. Backend: [src/main/java](src/main/java)
+2. Frontend source: [frontend](frontend)
+3. Production-статика, отдаваемая Spring: [src/main/resources/static](src/main/resources/static)
+4. Gradle автосборка фронта: [build.gradle.kts](build.gradle.kts)
 
 ## Требования
 
 1. JDK 21
 2. Node.js + npm
-3. Gradle Wrapper (уже есть в проекте)
+3. Gradle Wrapper
 
 Проверка:
 
@@ -51,44 +75,37 @@ node -v
 npm -v
 ```
 
-Если в PowerShell ошибка на `npm` из-за policy, используйте:
+Если PowerShell блокирует `npm`, используйте `npm.cmd`.
 
-```powershell
-npm.cmd -v
-```
+## Запуск
 
-## Как запускать
-
-### Вариант 1. Одна команда через Gradle (рекомендуется)
-
-Из корня проекта:
+### Вариант 1. Через Gradle (рекомендуется)
 
 ```powershell
 .\gradlew.bat clean build
 .\gradlew.bat bootRun
 ```
 
-Что делает сборка:
+Во время `build` автоматически выполняется:
 
-1. Устанавливает зависимости фронта (`npm install`)
-2. Собирает фронт (`npm run build`)
-3. Очищает [src/main/resources/static](src/main/resources/static)
-4. Копирует `frontend/dist` в [src/main/resources/static](src/main/resources/static)
-5. Собирает и запускает Spring Boot
+1. `npm install` в [frontend](frontend)
+2. `npm run build` в [frontend](frontend)
+3. очистка [src/main/resources/static](src/main/resources/static)
+4. копирование `frontend/dist` в [src/main/resources/static](src/main/resources/static)
 
-После запуска откройте:
+После запуска:
 
-1. `http://localhost:8080`
+1. Приложение: `http://localhost:8080`
 
 ### Вариант 2. Раздельный dev-режим
 
-Терминал 1 (бэкенд):
+Backend:
 
 ```powershell
 .\gradlew.bat bootRun
 ```
 
-Терминал 2 (фронтенд):
+Frontend:
 
 ```powershell
 cd frontend
@@ -98,94 +115,99 @@ npm run dev
 
 Адреса:
 
-1. Бэкенд API: `http://localhost:8080`
-2. Фронтенд dev: `http://localhost:5173`
+1. Backend API: `http://localhost:8080`
+2. Frontend dev: `http://localhost:5173`
 
 ## API
 
-Эндпоинт:
+Базовый путь: `/api/images`
 
-1. `POST /api/images/process`
-2. `Content-Type: multipart/form-data`
+### 1. Обычная обработка
 
-Параметры формы:
+`POST /api/images/process`
 
-1. `image1` (обязательно)
-2. `image2` (обязательно для всех операций, кроме `MASK`)
+`multipart/form-data` параметры:
+
+1. `image1` (обязательный)
+2. `image2` (обязательный для операций кроме `MASK`)
 3. `operation` (`SUM | MULTIPLY | AVERAGE | MINIMUM | MAXIMUM | MASK`)
 4. `channels` (`RGB | R | G | B | RG | GB | RB`)
-5. `maskShape` (`CIRCLE | SQUARE | RECTANGLE`, нужен для `MASK`)
+5. `maskShape` (`CIRCLE | SQUARE | RECTANGLE`, опционально, default `CIRCLE`)
 
-Ответ:
+Ответ: PNG (`image/png`)
 
-1. PNG-изображение (`image/png`)
+### 2. Композиция слоев
 
-## Алгоритм обработки изображений
+`POST /api/images/compose`
 
-### 1. Подготовка входных изображений
+`multipart/form-data` параметры (по индексам):
 
-1. Проверяется, что первое изображение задано.
-2. Для бинарных операций (`SUM`, `MULTIPLY`, `AVERAGE`, `MINIMUM`, `MAXIMUM`) требуется второе изображение.
-3. Базовым выбирается изображение с большей площадью.
-4. Меньшее изображение масштабируется на весь размер базового через отображение координат:
+1. `images` (список файлов)
+2. `modes` (список blend mode)
+3. `opacities` (список значений `0..1`)
+
+Важно: длины списков `images`, `modes`, `opacities` должны совпадать.
+
+Ответ: PNG (`image/png`)
+
+## Алгоритм обработки
+
+### Обычный режим
+
+1. Базой становится изображение с большей площадью
+2. Второе изображение масштабируется на размер базы через отображение координат:
 
 $$
 x_s = round\left(x \cdot \frac{W_s - 1}{W_t - 1}\right),\quad
 y_s = round\left(y \cdot \frac{H_s - 1}{H_t - 1}\right)
 $$
 
-где:
+3. Каналы извлекаются из `int rgb`:
 
-1. $W_t, H_t$ — ширина и высота целевого (большего) изображения
-2. $W_s, H_s$ — ширина и высота источника (меньшего) изображения
+$$
+R = (rgb >> 16) \& 255,\quad G = (rgb >> 8) \& 255,\quad B = rgb \& 255
+$$
 
-### 2. Работа с каналами
+4. Операция применяется только к выбранным каналам
+5. Для `MASK` маска строится по центру изображения, вне маски выбранные каналы зануляются
 
-Пиксель раскладывается на каналы через битовые операции:
+### Режим слоев
 
-R = (rgb >> 16) \& 255;\
-G = (rgb >> 8) \& 255;\
-B = rgb \& 255;
+1. Определяется итоговый холст как `max(width)` и `max(height)` по всем слоям
+2. Первый слой кладется как база с учетом его opacity
+3. Каждый следующий слой:
+   1. масштабируется на итоговый размер
+   2. комбинируется с текущим результатом по выбранному blend mode
+   3. смешивается с учетом opacity
 
-Операция применяется только к выбранным каналам. Невыбранные каналы берутся из базового изображения без изменений.
+Смешивание канала:
 
-### 3. Формулы операций
+$$
+out = base \cdot (1 - \alpha) + blended \cdot \alpha
+$$
 
-Для каждого выбранного канала:
+где $\alpha \in [0,1]$.
 
-1. `SUM`: $out = clamp(base + inf)$
-2. `MULTIPLY`: $out = \frac{base \cdot inf}{255}$
-3. `AVERAGE`: $out = \frac{base + inf}{2}$
-4. `MINIMUM`: $out = min(base, inf)$
-5. `MAXIMUM`: $out = max(base, inf)$
+## Frontend
 
-`clamp` ограничивает значение диапазоном $[0, 255]$.
+Основной UI: [frontend/src/App.vue](frontend/src/App.vue)
 
-### 4. Маска
-
-Для операции `MASK`:
-
-1. Маска создается по размеру первого изображения.
-2. Центр маски всегда в центре изображения.
-3. Вне маски выбранные каналы зануляются, невыбранные остаются исходными.
-
-Формы маски:
-
-1. `CIRCLE`
-2. `SQUARE`
-3. `RECTANGLE`
+1. Переключение режимов: обычный / слои
+2. Кастомные file picker элементы
+3. Управление слоями: добавление, удаление, режим наложения, прозрачность
+4. Вывод результата и скачивание PNG
 
 ## Частые проблемы
 
-1. Ошибка `Unsupported class file major version 69`
-   1. Проверьте, что используется JDK 21.
-   2. Выполните `clean` перед сборкой.
-2. `npm` не запускается в PowerShell из-за ExecutionPolicy
-   1. Используйте `npm.cmd`.
-3. Не найден Node/npm в сборке Gradle
-   1. Добавьте Node.js в `PATH`.
+1. `Unsupported class file major version 69`
+   1. Убедитесь, что используется JDK 21
+   2. Выполните `clean` перед сборкой
+2. `npm` не запускается в PowerShell
+   1. Используйте `npm.cmd`
+3. Ошибка по `modes/opacities`
+   1. Количество значений должно совпадать с количеством `images`
 
-## Команды для быстрой проверки
+## Полезные команды
 
 ```powershell
 .\gradlew.bat tasks --group frontend
