@@ -3,136 +3,211 @@ package by.michael;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.stream.Stream;
+import javafx.application.Application;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 import javax.imageio.ImageIO;
 
-public class Main {
+public class Main extends Application {
 
-  // resources/sae.jpg
-  // BlueLockPuzzle.png
+  private final TextField firstImageNameField = new TextField();
+  private final TextField secondImageNameField = new TextField();
+  private final ComboBox<ImageProcessor.Operation> operationBox = new ComboBox<>();
+  private final ComboBox<ImageProcessor.ColorChannels> channelsBox = new ComboBox<>();
+  private final ComboBox<MaskFactory.MaskShape> maskShapeBox = new ComboBox<>();
+  private final ImageView resultView = new ImageView();
+
+  private BufferedImage resultImage;
 
   public static void main(String[] args) {
-    // Установка кодировки UTF-8 для консоли
-    System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
-    System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+    launch(args);
+  }
 
-    ConsoleMenu menu = new ConsoleMenu();
+  @Override
+  public void start(Stage stage) {
+    stage.setTitle("Image Processor");
 
+    GridPane form = new GridPane();
+    form.setHgap(10);
+    form.setVgap(10);
+    form.setPadding(new Insets(10));
+
+    firstImageNameField.setPromptText("Например: in.jpg");
+    secondImageNameField.setPromptText("Например: sae.jpg");
+
+    operationBox.getItems().addAll(ImageProcessor.Operation.values());
+    operationBox.setValue(ImageProcessor.Operation.SUM);
+
+    channelsBox.getItems().addAll(ImageProcessor.ColorChannels.values());
+    channelsBox.setValue(ImageProcessor.ColorChannels.RGB);
+
+    maskShapeBox.getItems().addAll(MaskFactory.MaskShape.values());
+    maskShapeBox.setValue(MaskFactory.MaskShape.CIRCLE);
+
+    operationBox
+        .valueProperty()
+        .addListener((obs, oldVal, newVal) -> updateControlsByOperation(newVal));
+    updateControlsByOperation(operationBox.getValue());
+
+    form.add(new Label("Имя 1-го файла (resources):"), 0, 0);
+    form.add(firstImageNameField, 1, 0);
+
+    form.add(new Label("Имя 2-го файла (resources):"), 0, 1);
+    form.add(secondImageNameField, 1, 1);
+
+    form.add(new Label("Операция:"), 0, 2);
+    form.add(operationBox, 1, 2);
+
+    form.add(new Label("Цветовые каналы:"), 0, 3);
+    form.add(channelsBox, 1, 3);
+
+    form.add(new Label("Форма маски:"), 0, 4);
+    form.add(maskShapeBox, 1, 4);
+
+    GridPane.setHgrow(firstImageNameField, Priority.ALWAYS);
+    GridPane.setHgrow(secondImageNameField, Priority.ALWAYS);
+
+    Button runButton = new Button("Выполнить");
+    Button saveButton = new Button("Сохранить результат");
+
+    runButton.setOnAction(event -> processImages());
+    saveButton.setOnAction(event -> saveResult(stage));
+
+    HBox actions = new HBox(10, runButton, saveButton);
+    actions.setAlignment(Pos.CENTER_LEFT);
+    actions.setPadding(new Insets(0, 10, 10, 10));
+
+    resultView.setPreserveRatio(true);
+    resultView.setFitWidth(950);
+    resultView.setFitHeight(550);
+
+    VBox content = new VBox(8, form, actions, resultView);
+    content.setPadding(new Insets(10));
+
+    BorderPane root = new BorderPane(content);
+    Scene scene = new Scene(root, 1040, 760);
+
+    stage.setScene(scene);
+    stage.show();
+  }
+
+  private void updateControlsByOperation(ImageProcessor.Operation operation) {
+    boolean isMask = operation == ImageProcessor.Operation.MASK;
+    secondImageNameField.setDisable(isMask);
+    maskShapeBox.setDisable(!isMask);
+  }
+
+  private void processImages() {
     try {
-      System.out.println("=== Приложение для обработки изображений ===\n");
+      String firstName = firstImageNameField.getText().trim();
+      String secondName = secondImageNameField.getText().trim();
 
-      // Получаем имена исходных файлов и ищем их в resources
-      String img1Name = menu.getImageName("Введите имя первого изображения (например, in.jpg): ");
-      String img2Name = menu.getImageName("Введите имя второго изображения (например, sae.jpg): ");
+      if (firstName.isEmpty()) {
+        showError("Введите имя первого файла.");
+        return;
+      }
 
-      File img1File = findFileInResources(img1Name);
-      File img2File = findFileInResources(img2Name);
+      ImageProcessor.Operation operation = operationBox.getValue();
+      ImageProcessor.ColorChannels channels = channelsBox.getValue();
+      MaskFactory.MaskShape maskShape = maskShapeBox.getValue();
 
-      if (img1File == null || img2File == null) {
-        if (img1File == null) {
-          System.err.println("Ошибка: файл не найден в папке resources: " + img1Name);
+      File firstFile = findFileInResources(firstName);
+      if (firstFile == null) {
+        showError("Файл не найден в resources: " + firstName);
+        return;
+      }
+
+      BufferedImage firstImage = ImageIO.read(firstFile);
+      if (firstImage == null) {
+        showError("Не удалось прочитать изображение: " + firstName);
+        return;
+      }
+
+      BufferedImage secondImage = null;
+      if (operation != ImageProcessor.Operation.MASK) {
+        if (secondName.isEmpty()) {
+          showError("Для выбранной операции нужно второе изображение.");
+          return;
         }
-        if (img2File == null) {
-          System.err.println("Ошибка: файл не найден в папке resources: " + img2Name);
+
+        File secondFile = findFileInResources(secondName);
+        if (secondFile == null) {
+          showError("Файл не найден в resources: " + secondName);
+          return;
         }
-        menu.close();
-        return;
+
+        secondImage = ImageIO.read(secondFile);
+        if (secondImage == null) {
+          showError("Не удалось прочитать изображение: " + secondName);
+          return;
+        }
       }
 
-      // Загружаем изображения
-      BufferedImage img1 = ImageIO.read(img1File);
-      BufferedImage img2 = ImageIO.read(img2File);
-
-      // Проверяем, что изображения загружены
-      if (img1 == null || img2 == null) {
-        System.err.println("Ошибка: не удалось прочитать одно из изображений.");
-        menu.close();
-        return;
-      }
-
-      // Проверяем размеры изображений
-      if (img1.getWidth() != img2.getWidth() || img1.getHeight() != img2.getHeight()) {
-        System.err.println("Ошибка: изображения должны быть одинакового размера.");
-        System.err.println("Размер первого: " + img1.getWidth() + "x" + img1.getHeight());
-        System.err.println("Размер второго: " + img2.getWidth() + "x" + img2.getHeight());
-        menu.close();
-        return;
-      }
-
-      // Показываем меню операций
-      int operation = menu.showOperationMenu();
-      BufferedImage result = null;
-
-      // Выполняем выбранную операцию
-      switch (operation) {
-        case 1:
-          System.out.println("\nВыполняю: Попиксельная сумма...");
-          result = ImageProcessor.sum(img1, img2);
-          break;
-        case 2:
-          System.out.println("\nВыполняю: Попиксельное произведение...");
-          result = ImageProcessor.multiply(img1, img2);
-          break;
-        case 3:
-          System.out.println("\nВыполняю: Попиксельное среднее...");
-          result = ImageProcessor.average(img1, img2);
-          break;
-        case 4:
-          System.out.println("\nВыполняю: Попиксельный минимум...");
-          result = ImageProcessor.minimum(img1, img2);
-          break;
-        case 5:
-          System.out.println("\nВыполняю: Попиксельный максимум...");
-          result = ImageProcessor.maximum(img1, img2);
-          break;
-        case 6:
-          System.out.println("\nПрименяю маску (круг) к первому изображению...");
-          boolean[][] circleMask = MaskFactory.createCircleMask(img1.getWidth(), img1.getHeight());
-          result = ImageProcessor.applyMask(img1, circleMask);
-          break;
-        case 7:
-          System.out.println("\nПрименяю маску (квадрат) к первому изображению...");
-          boolean[][] squareMask = MaskFactory.createSquareMask(img1.getWidth(), img1.getHeight());
-          result = ImageProcessor.applyMask(img1, squareMask);
-          break;
-        case 8:
-          System.out.println("\nПрименяю маску (прямоугольник) к первому изображению...");
-          boolean[][] rectMask = MaskFactory.createRectangleMask(img1.getWidth(), img1.getHeight());
-          result = ImageProcessor.applyMask(img1, rectMask);
-          break;
-      }
-
-      // Получаем имя файла для сохранения
-      String outputPath = menu.getOutputPath();
-
-      // Сохраняем результат
-      if (result != null) {
-        String format = outputPath.contains(".")
-            ? outputPath.substring(outputPath.lastIndexOf(".") + 1)
-            : "jpg";
-        ImageIO.write(result, format, new File(outputPath));
-        System.out.println("✓ Успешно! Результат сохранен в файл: " + outputPath);
-      }
-
-      menu.close();
+      resultImage = ImageProcessor.process(firstImage, secondImage, operation, channels, maskShape);
+      resultView.setImage(SwingFXUtils.toFXImage(resultImage, null));
 
     } catch (IOException e) {
-      System.err.println("Ошибка при работе с файлом: " + e.getMessage());
-      e.printStackTrace();
-      menu.close();
+      showError("Ошибка при чтении файлов: " + e.getMessage());
     } catch (Exception e) {
-      System.err.println("Непредвиденная ошибка: " + e.getMessage());
-      e.printStackTrace();
-      menu.close();
+      showError("Ошибка обработки: " + e.getMessage());
     }
   }
 
-  private static File findFileInResources(String fileName) throws IOException {
+  private void saveResult(Stage stage) {
+    if (resultImage == null) {
+      showError("Сначала выполните обработку изображения.");
+      return;
+    }
+
+    FileChooser chooser = new FileChooser();
+    chooser.setTitle("Сохранить результат");
+    chooser
+        .getExtensionFilters()
+        .addAll(
+            new FileChooser.ExtensionFilter("PNG Image", "*.png"),
+            new FileChooser.ExtensionFilter("JPEG Image", "*.jpg", "*.jpeg"));
+
+    File target = chooser.showSaveDialog(stage);
+    if (target == null) {
+      return;
+    }
+
+    String format = getFormatByName(target.getName());
+    try {
+      ImageIO.write(resultImage, format, target);
+    } catch (IOException e) {
+      showError("Не удалось сохранить файл: " + e.getMessage());
+    }
+  }
+
+  private String getFormatByName(String fileName) {
+    String lower = fileName.toLowerCase();
+    if (lower.endsWith(".png")) {
+      return "png";
+    }
+    return "jpg";
+  }
+
+  private File findFileInResources(String fileName) throws IOException {
     Path resourcesDir = Paths.get("src", "main", "resources");
 
     if (!Files.exists(resourcesDir) || !Files.isDirectory(resourcesDir)) {
@@ -147,5 +222,13 @@ public class Main {
           .orElse(null);
       return found == null ? null : found.toFile();
     }
+  }
+
+  private void showError(String message) {
+    Alert alert = new Alert(Alert.AlertType.ERROR);
+    alert.setTitle("Ошибка");
+    alert.setHeaderText("Операция не выполнена");
+    alert.setContentText(message);
+    alert.showAndWait();
   }
 }

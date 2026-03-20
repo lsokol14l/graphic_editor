@@ -1,7 +1,20 @@
 package by.michael;
 
-
 public class MaskFactory {
+
+  public enum MaskShape {
+    CIRCLE,
+    SQUARE,
+    RECTANGLE
+  }
+
+  public static boolean[][] createMask(MaskShape shape, int width, int height) {
+    return switch (shape) {
+      case CIRCLE -> createCircleMask(width, height);
+      case SQUARE -> createSquareMask(width, height);
+      case RECTANGLE -> createRectangleMask(width, height);
+    };
+  }
 
   /** Создает маску в виде круга */
   public static boolean[][] createCircleMask(int width, int height) {
@@ -45,8 +58,7 @@ public class MaskFactory {
 
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
-        mask[y][x] =
-            x >= startX && x < startX + rectWidth && y >= startY && y < startY + rectHeight;
+        mask[y][x] = x >= startX && x < startX + rectWidth && y >= startY && y < startY + rectHeight;
       }
     }
     return mask;
