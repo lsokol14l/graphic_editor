@@ -1,5 +1,10 @@
 plugins {
     id("java")
+    application
+}
+
+application {
+    mainClass.set("by.michael.Main") // Укажите полный путь к вашему основному классу
 }
 
 group = "by.michael"
