@@ -1,11 +1,15 @@
 package by.michael.application;
 
+import by.michael.domain.image.BlendMode;
 import by.michael.domain.image.ImageProcessor;
+import by.michael.domain.image.LayerComposer;
 import by.michael.domain.image.MaskFactory;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import javax.imageio.ImageIO;
 import org.springframework.stereotype.Service;
@@ -41,6 +45,36 @@ public class ImageProcessingService {
     return toPng(result);
   }
 
+  public byte[] composeLayers(
+      List<MultipartFile> images,
+      List<String> modes,
+      List<Double> opacities)
+      throws IOException {
+
+    if (images == null || images.isEmpty()) {
+      throw new IllegalArgumentException("Добавьте хотя бы одно изображение");
+    }
+
+    if (modes == null || opacities == null || modes.size() != images.size() || opacities.size() != images.size()) {
+      throw new IllegalArgumentException("Параметры modes/opacities должны соответствовать количеству изображений");
+    }
+
+    List<BufferedImage> readImages = new ArrayList<>(images.size());
+    List<BlendMode> parsedModes = new ArrayList<>(images.size());
+
+    for (int i = 0; i < images.size(); i++) {
+      BufferedImage image = readImage(images.get(i));
+      if (image == null) {
+        throw new IllegalArgumentException("Не удалось прочитать изображение слоя #" + (i + 1));
+      }
+      readImages.add(image);
+      parsedModes.add(parseBlendMode(modes.get(i)));
+    }
+
+    BufferedImage result = LayerComposer.compose(readImages, parsedModes, opacities);
+    return toPng(result);
+  }
+
   private ImageProcessor.Operation parseOperation(String value) {
     try {
       return ImageProcessor.Operation.valueOf(normalize(value));
@@ -65,6 +99,17 @@ public class ImageProcessingService {
       return MaskFactory.MaskShape.valueOf(normalize(value));
     } catch (Exception ex) {
       throw new IllegalArgumentException("Неверный параметр maskShape");
+    }
+  }
+
+  private BlendMode parseBlendMode(String value) {
+    if (value == null || value.isBlank()) {
+      return BlendMode.NONE;
+    }
+    try {
+      return BlendMode.valueOf(normalize(value));
+    } catch (Exception ex) {
+      throw new IllegalArgumentException("Неверный параметр blend mode");
     }
   }
 

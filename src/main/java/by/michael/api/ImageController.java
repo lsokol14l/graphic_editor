@@ -2,6 +2,7 @@ package by.michael.api;
 
 import by.michael.application.ImageProcessingService;
 import java.io.IOException;
+import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -39,6 +40,23 @@ public class ImageController {
     headers.setContentType(MediaType.IMAGE_PNG);
     headers.setContentLength(bytes.length);
     headers.set("Content-Disposition", "inline; filename=result.png");
+
+    return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+  }
+
+  @PostMapping(value = "/compose", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ResponseEntity<byte[]> compose(
+      @RequestParam("images") List<MultipartFile> images,
+      @RequestParam("modes") List<String> modes,
+      @RequestParam("opacities") List<Double> opacities)
+      throws IOException {
+
+    byte[] bytes = imageProcessingService.composeLayers(images, modes, opacities);
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.IMAGE_PNG);
+    headers.setContentLength(bytes.length);
+    headers.set("Content-Disposition", "inline; filename=composed.png");
 
     return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
   }

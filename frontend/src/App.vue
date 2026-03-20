@@ -1,18 +1,41 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+const mode = ref('SINGLE')
+
 const operation = ref('SUM')
 const channels = ref('RGB')
 const maskShape = ref('CIRCLE')
 const image1 = ref(null)
 const image2 = ref(null)
-const resultUrl = ref('')
-const errorText = ref('')
-const busy = ref(false)
 const firstInputRef = ref(null)
 const secondInputRef = ref(null)
 
+const layers = ref([])
+const layersInputRef = ref(null)
+
+const resultUrl = ref('')
+const errorText = ref('')
+const busy = ref(false)
+
 const needsSecondImage = computed(() => operation.value !== 'MASK')
+
+const blendModes = [
+  'NONE',
+  'SUM',
+  'DIFFERENCE',
+  'MULTIPLY',
+  'AVERAGE',
+  'MINIMUM',
+  'MAXIMUM'
+]
+
+function clearResult() {
+  if (resultUrl.value) {
+    URL.revokeObjectURL(resultUrl.value)
+  }
+  resultUrl.value = ''
+}
 
 function onFileChange(event, target) {
   const file = event.target.files?.[0] || null
@@ -34,7 +57,7 @@ function openFileDialog(target) {
   }
 }
 
-async function processImages() {
+async function processSingle() {
   errorText.value = ''
   if (!image1.value) {
     errorText.value = 'Выберите первое изображение.'
@@ -67,9 +90,71 @@ async function processImages() {
     }
 
     const blob = await response.blob()
-    if (resultUrl.value) {
-      URL.revokeObjectURL(resultUrl.value)
+    clearResult()
+    resultUrl.value = URL.createObjectURL(blob)
+  } catch (error) {
+    errorText.value = error.message
+  } finally {
+    busy.value = false
+  }
+}
+
+function addLayers(event) {
+  const files = Array.from(event.target.files || [])
+  for (const file of files) {
+    layers.value.push({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      mode: 'NONE',
+      opacity: 100
+    })
+  }
+  event.target.value = ''
+}
+
+function openLayersDialog() {
+  if (layersInputRef.value) {
+    layersInputRef.value.click()
+  }
+}
+
+function removeLayer(id) {
+  layers.value = layers.value.filter(layer => layer.id !== id)
+}
+
+function opacityPercent(layer) {
+  return `${layer.opacity}%`
+}
+
+async function composeLayers() {
+  errorText.value = ''
+  if (layers.value.length === 0) {
+    errorText.value = 'Добавьте хотя бы один слой.'
+    return
+  }
+
+  const formData = new FormData()
+  for (const layer of layers.value) {
+    formData.append('images', layer.file)
+    formData.append('modes', layer.mode)
+    formData.append('opacities', String(layer.opacity / 100))
+  }
+
+  busy.value = true
+  try {
+    const response = await fetch('http://localhost:8080/api/images/compose', {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(text || 'Не удалось собрать изображение')
     }
+
+    const blob = await response.blob()
+    clearResult()
     resultUrl.value = URL.createObjectURL(blob)
   } catch (error) {
     errorText.value = error.message
@@ -79,19 +164,20 @@ async function processImages() {
 }
 
 function resetResult() {
-  if (resultUrl.value) {
-    URL.revokeObjectURL(resultUrl.value)
-  }
-  resultUrl.value = ''
+  clearResult()
   errorText.value = ''
   image1.value = null
   image2.value = null
+  layers.value = []
 
   if (firstInputRef.value) {
     firstInputRef.value.value = ''
   }
   if (secondInputRef.value) {
     secondInputRef.value.value = ''
+  }
+  if (layersInputRef.value) {
+    layersInputRef.value.value = ''
   }
 }
 </script>
@@ -123,16 +209,43 @@ function resetResult() {
           Обработка изображений
         </h1>
         <p class="mt-2 max-w-2xl text-sm text-slate-300">
-          Загрузи два изображения, выбери операцию и каналы, а затем получи
-          результат в один клик.
+          Используйте обычные операции с каналами и маской или режим слоев, где
+          композиция собирается снизу вверх.
         </p>
       </header>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          class="rounded-lg px-4 py-2 text-sm font-semibold transition"
+          :class="
+            mode === 'SINGLE'
+              ? 'bg-cyan-500 text-white'
+              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+          "
+          @click="mode = 'SINGLE'"
+        >
+          Обычная обработка
+        </button>
+        <button
+          type="button"
+          class="rounded-lg px-4 py-2 text-sm font-semibold transition"
+          :class="
+            mode === 'LAYERS'
+              ? 'bg-cyan-500 text-white'
+              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+          "
+          @click="mode = 'LAYERS'"
+        >
+          Слои
+        </button>
+      </div>
 
       <section class="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <div
           class="rounded-2xl border border-slate-700/70 bg-slate-900/80 p-6 shadow-soft backdrop-blur"
         >
-          <div class="grid gap-4 sm:grid-cols-2">
+          <div v-if="mode === 'SINGLE'" class="grid gap-4 sm:grid-cols-2">
             <label class="field sm:col-span-2">
               <span class="field-label">Первое изображение</span>
               <input
@@ -153,9 +266,9 @@ function resetResult() {
                   >
                     Выбрать файл
                   </button>
-                  <span class="truncate text-sm text-slate-300">
-                    {{ image1 ? image1.name : 'Файл не выбран' }}
-                  </span>
+                  <span class="truncate text-sm text-slate-300">{{
+                    image1 ? image1.name : 'Файл не выбран'
+                  }}</span>
                 </div>
               </div>
             </label>
@@ -183,9 +296,9 @@ function resetResult() {
                   >
                     Выбрать файл
                   </button>
-                  <span class="truncate text-sm text-slate-300">
-                    {{ image2 ? image2.name : 'Файл не выбран' }}
-                  </span>
+                  <span class="truncate text-sm text-slate-300">{{
+                    image2 ? image2.name : 'Файл не выбран'
+                  }}</span>
                 </div>
               </div>
             </label>
@@ -229,13 +342,102 @@ function resetResult() {
             </label>
           </div>
 
+          <div v-else class="space-y-3">
+            <div class="mb-4 flex flex-wrap items-center gap-2">
+              <input
+                ref="layersInputRef"
+                class="hidden"
+                type="file"
+                accept="image/*"
+                multiple
+                @change="addLayers"
+              />
+              <button
+                type="button"
+                class="inline-flex items-center rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/25"
+                @click="openLayersDialog"
+              >
+                Добавить изображения
+              </button>
+              <span class="text-sm text-slate-400"
+                >Порядок в списке: снизу вверх</span
+              >
+            </div>
+
+            <div
+              v-for="(layer, index) in layers"
+              :key="layer.id"
+              class="rounded-xl border border-slate-700 bg-slate-900/70 p-3"
+            >
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-slate-100">
+                    {{ index + 1 }}. {{ layer.name }}
+                  </p>
+                  <p class="text-xs text-slate-400">
+                    {{ index === 0 ? 'Базовый слой' : 'Накладываемый слой' }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="rounded-md border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-xs text-rose-200 transition hover:bg-rose-500/30"
+                  @click="removeLayer(layer.id)"
+                >
+                  Удалить
+                </button>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="field">
+                  <span class="field-label">Метод наложения</span>
+                  <select class="field-input" v-model="layer.mode">
+                    <option
+                      v-for="mode in blendModes"
+                      :key="mode"
+                      :value="mode"
+                    >
+                      {{ mode }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span class="field-label"
+                    >Прозрачность: {{ opacityPercent(layer) }}</span
+                  >
+                  <input
+                    class="field-input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    v-model.number="layer.opacity"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div
+              v-if="layers.length === 0"
+              class="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400"
+            >
+              Пока нет слоев. Добавьте изображения.
+            </div>
+          </div>
+
           <div class="mt-6 flex flex-wrap items-center gap-3">
             <button
               class="rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:scale-[1.02] hover:from-cyan-400 hover:to-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
               :disabled="busy"
-              @click="processImages"
+              @click="mode === 'SINGLE' ? processSingle() : composeLayers()"
             >
-              {{ busy ? 'Обработка...' : 'Выполнить' }}
+              {{
+                busy
+                  ? 'Обработка...'
+                  : mode === 'SINGLE'
+                    ? 'Выполнить'
+                    : 'Собрать изображение'
+              }}
             </button>
             <p v-if="errorText" class="text-sm font-medium text-rose-300">
               {{ errorText }}
