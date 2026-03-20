@@ -23,6 +23,17 @@ function onFileChange(event, target) {
   }
 }
 
+function openFileDialog(target) {
+  if (target === 1 && firstInputRef.value) {
+    firstInputRef.value.click()
+    return
+  }
+
+  if (target === 2 && secondInputRef.value && needsSecondImage.value) {
+    secondInputRef.value.click()
+  }
+}
+
 async function processImages() {
   errorText.value = ''
   if (!image1.value) {
@@ -125,24 +136,58 @@ function resetResult() {
             <label class="field sm:col-span-2">
               <span class="field-label">Первое изображение</span>
               <input
-                class="field-input"
+                class="hidden"
                 type="file"
                 accept="image/*"
                 ref="firstInputRef"
                 @change="onFileChange($event, 1)"
               />
+              <div
+                class="rounded-xl border border-slate-700 bg-slate-900/80 p-3"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    class="inline-flex items-center rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/25"
+                    @click="openFileDialog(1)"
+                  >
+                    Выбрать файл
+                  </button>
+                  <span class="truncate text-sm text-slate-300">
+                    {{ image1 ? image1.name : 'Файл не выбран' }}
+                  </span>
+                </div>
+              </div>
             </label>
 
             <label class="field sm:col-span-2">
               <span class="field-label">Второе изображение</span>
               <input
-                class="field-input"
+                class="hidden"
                 type="file"
                 accept="image/*"
                 ref="secondInputRef"
                 :disabled="!needsSecondImage"
                 @change="onFileChange($event, 2)"
               />
+              <div
+                class="rounded-xl border border-slate-700 bg-slate-900/80 p-3"
+                :class="{ 'opacity-60': !needsSecondImage }"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    class="inline-flex items-center rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!needsSecondImage"
+                    @click="openFileDialog(2)"
+                  >
+                    Выбрать файл
+                  </button>
+                  <span class="truncate text-sm text-slate-300">
+                    {{ image2 ? image2.name : 'Файл не выбран' }}
+                  </span>
+                </div>
+              </div>
             </label>
 
             <label class="field">
