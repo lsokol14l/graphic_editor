@@ -2,6 +2,7 @@ package by.michael;
 
 import java.util.Scanner;
 
+@Deprecated
 public class ConsoleMenu {
   private final Scanner scanner;
 
