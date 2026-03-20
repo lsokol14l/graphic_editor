@@ -9,6 +9,8 @@ const image2 = ref(null)
 const resultUrl = ref('')
 const errorText = ref('')
 const busy = ref(false)
+const firstInputRef = ref(null)
+const secondInputRef = ref(null)
 
 const needsSecondImage = computed(() => operation.value !== 'MASK')
 
@@ -64,6 +66,23 @@ async function processImages() {
     busy.value = false
   }
 }
+
+function resetResult() {
+  if (resultUrl.value) {
+    URL.revokeObjectURL(resultUrl.value)
+  }
+  resultUrl.value = ''
+  errorText.value = ''
+  image1.value = null
+  image2.value = null
+
+  if (firstInputRef.value) {
+    firstInputRef.value.value = ''
+  }
+  if (secondInputRef.value) {
+    secondInputRef.value.value = ''
+  }
+}
 </script>
 
 <template>
@@ -109,6 +128,7 @@ async function processImages() {
                 class="field-input"
                 type="file"
                 accept="image/*"
+                ref="firstInputRef"
                 @change="onFileChange($event, 1)"
               />
             </label>
@@ -119,6 +139,7 @@ async function processImages() {
                 class="field-input"
                 type="file"
                 accept="image/*"
+                ref="secondInputRef"
                 :disabled="!needsSecondImage"
                 @change="onFileChange($event, 2)"
               />
@@ -191,13 +212,22 @@ async function processImages() {
               :src="resultUrl"
               alt="Результат обработки"
             />
-            <a
-              class="mt-3 inline-flex items-center rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/20"
-              :href="resultUrl"
-              download="result.png"
-            >
-              Скачать result.png
-            </a>
+            <div class="mt-3 flex flex-wrap items-center gap-2 justify-between">
+              <a
+                class="inline-flex items-center rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/20"
+                :href="resultUrl"
+                download="result.png"
+              >
+                Скачать result.png
+              </a>
+              <button
+                type="button"
+                class="inline-flex items-center rounded-lg border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/35"
+                @click="resetResult"
+              >
+                Сбросить
+              </button>
+            </div>
           </div>
 
           <div
