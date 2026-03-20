@@ -1,4 +1,4 @@
-package by.michael;
+package by.michael.domain.image;
 
 public class MaskFactory {
 
