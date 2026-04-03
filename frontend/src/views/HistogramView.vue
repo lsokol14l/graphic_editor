@@ -14,9 +14,24 @@
       <header
         class="mb-6 rounded-2xl border border-slate-700/70 bg-slate-900/75 p-6 shadow-soft backdrop-blur flex justify-center"
       >
-        <h1 class="text-3xl font-bold text-cyan-300 md:text-4xl">
-          Градационные преобразования
-        </h1>
+        <div class="flex w-full items-center justify-between">
+          <RouterLink
+            to="/"
+            class="inline-flex items-center rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-300 transition hover:border-slate-500 hover:text-white"
+          >
+            Назад
+          </RouterLink>
+          <h1 class="text-3xl font-bold text-cyan-300 md:text-4xl">
+            Градационные преобразования
+          </h1>
+          <button
+            @click="downloadImage"
+            :disabled="!processedImageSrc && !originalImageSrc"
+            class="inline-flex items-center rounded-lg border border-emerald-500/60 bg-emerald-600/25 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200 transition hover:bg-emerald-600/35 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Скачать
+          </button>
+        </div>
       </header>
 
       <!-- Основной контент -->
@@ -401,6 +416,16 @@ export default {
 
     resetTransformationCurve() {
       this.initTransformationCurve()
+    },
+
+    downloadImage() {
+      const imageUrl = this.processedImageSrc || this.originalImageSrc
+      if (!imageUrl) return
+
+      const link = document.createElement('a')
+      link.href = imageUrl
+      link.download = `histogram_result_${Date.now()}.png`
+      link.click()
     },
 
     applyTransformation() {

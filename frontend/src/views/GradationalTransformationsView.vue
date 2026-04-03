@@ -19,7 +19,7 @@
           to="/"
           class="inline-flex items-center rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-300 transition hover:border-slate-500 hover:text-white"
         >
-          Back to Home
+          Назад
         </RouterLink>
         <p class="mt-4 text-xs uppercase tracking-[0.2em] text-emerald-300">
           Image Lab
