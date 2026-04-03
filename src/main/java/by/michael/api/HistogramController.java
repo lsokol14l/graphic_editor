@@ -30,6 +30,49 @@ public class HistogramController {
     }
   }
 
+  @PostMapping("/transform")
+  public ResponseEntity<byte[]> applyGradationalTransformation(
+      @RequestParam("image") MultipartFile imageFile,
+      @RequestParam(value = "transformation", required = false) String transformationJson) {
+    try {
+      BufferedImage image = ImageIO.read(imageFile.getInputStream());
+      if (image == null) {
+        return ResponseEntity.badRequest().build();
+      }
+
+      BufferedImage result = applyTransformation(image);
+      return ResponseEntity.ok(bufferedImageToBytes(result));
+    } catch (IOException e) {
+      return ResponseEntity.internalServerError().build();
+    }
+  }
+
+  private BufferedImage applyTransformation(BufferedImage image) {
+    int width = image.getWidth();
+    int height = image.getHeight();
+    BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        int argb = image.getRGB(x, y);
+        int r = (argb >> 16) & 0xFF;
+        int g = (argb >> 8) & 0xFF;
+        int b = argb & 0xFF;
+
+        int gray = (int) Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        result.setRGB(x, y, (gray << 16) | (gray << 8) | gray);
+      }
+    }
+
+    return result;
+  }
+
+  private byte[] bufferedImageToBytes(BufferedImage image) throws IOException {
+    java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+    ImageIO.write(image, "png", outputStream);
+    return outputStream.toByteArray();
+  }
+
   private HistogramData calculateHistogramFromImage(BufferedImage image) {
     int[] histogram = new int[256];
     int width = image.getWidth();
