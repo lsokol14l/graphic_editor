@@ -24,13 +24,7 @@
           <h1 class="text-3xl font-bold text-cyan-300 md:text-4xl">
             Градационные преобразования
           </h1>
-          <button
-            @click="downloadImage"
-            :disabled="!processedImageSrc && !originalImageSrc"
-            class="inline-flex items-center rounded-lg border border-emerald-500/60 bg-emerald-600/25 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200 transition hover:bg-emerald-600/35 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Скачать
-          </button>
+          <div class="w-[78px]"></div>
         </div>
       </header>
 
@@ -85,6 +79,22 @@
               <p v-else class="text-slate-400 text-center">
                 Загрузите изображение
               </p>
+            </div>
+            <div class="mt-4 flex items-center justify-between gap-3">
+              <button
+                @click="downloadImage"
+                :disabled="!processedImageSrc && !originalImageSrc"
+                class="inline-flex items-center rounded-lg border border-emerald-500/60 bg-emerald-600/25 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200 transition hover:bg-emerald-600/35 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Скачать
+              </button>
+              <button
+                @click="resetImage"
+                :disabled="!originalImageSrc && !processedImageSrc"
+                class="inline-flex items-center rounded-lg border border-rose-500/60 bg-rose-600/25 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-rose-200 transition hover:bg-rose-600/35 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Сбросить
+              </button>
             </div>
           </div>
 
@@ -426,6 +436,22 @@ export default {
       link.href = imageUrl
       link.download = `histogram_result_${Date.now()}.png`
       link.click()
+    },
+
+    resetImage() {
+      this.originalImageSrc = null
+      this.processedImageSrc = null
+      this.originalImage = null
+      this.histogramData = null
+      this.imageStatus = null
+      this.transformationPoints = [
+        { x: 0, y: 0 },
+        { x: 255, y: 255 }
+      ]
+
+      this.$nextTick(() => {
+        this.drawTransformationCurve()
+      })
     },
 
     applyTransformation() {
