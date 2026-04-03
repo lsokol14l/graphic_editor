@@ -4,9 +4,10 @@ plugins {
     id("io.spring.dependency-management") version "1.1.6"
 }
 
-val npmCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "npm.cmd" else "npm"
+val bunCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "bun.exe" else "bun"
 val frontendDir = layout.projectDirectory.dir("frontend")
 val frontendDistDir = frontendDir.dir("dist")
+val frontendNodeModulesDir = frontendDir.dir("node_modules")
 val staticDir = layout.projectDirectory.dir("src/main/resources/static")
 
 java {
@@ -33,19 +34,24 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-val npmInstall by tasks.registering(Exec::class) {
+val frontendInstall by tasks.registering(Exec::class) {
     group = "frontend"
-    description = "Install frontend dependencies"
+    description = "Install frontend dependencies via Bun"
     workingDir(frontendDir.asFile)
-    commandLine(npmCommand, "install")
+    commandLine(bunCommand, "install")
+
+    // Run only when dependency descriptors change or node_modules is missing.
+    inputs.file(frontendDir.file("package.json").asFile)
+    inputs.file(frontendDir.file("bun.lock").asFile)
+    outputs.dir(frontendNodeModulesDir.asFile)
 }
 
-val npmBuild by tasks.registering(Exec::class) {
+val frontendBuild by tasks.registering(Exec::class) {
     group = "frontend"
     description = "Build Vue frontend"
-    dependsOn(npmInstall)
+    dependsOn(frontendInstall)
     workingDir(frontendDir.asFile)
-    commandLine(npmCommand, "run", "build")
+    commandLine(bunCommand, "run", "build")
 }
 
 val cleanFrontendStatic by tasks.registering(Delete::class) {
@@ -57,7 +63,7 @@ val cleanFrontendStatic by tasks.registering(Delete::class) {
 val copyFrontendDist by tasks.registering(Copy::class) {
     group = "frontend"
     description = "Copy frontend dist into Spring static resources"
-    dependsOn(npmBuild, cleanFrontendStatic)
+    dependsOn(frontendBuild, cleanFrontendStatic)
     from(frontendDistDir)
     into(staticDir)
 }

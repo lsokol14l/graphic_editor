@@ -16,9 +16,9 @@
         class="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-4 py-10 md:px-8"
     >
       <header
-          class="mb-8 rounded-2xl border border-slate-700/70 bg-slate-900/75 p-6 shadow-soft backdrop-blur"
+          class="mb-8 rounded-2xl border border-slate-700/70 bg-slate-900/75 p-6 shadow-soft backdrop-blur flex items-center justify-center"
       >
-        <h1 class="mt-3 text-3xl font-bold text-cyan-300 md:text-5xl">
+        <h1 class="text-3xl font-bold text-cyan-300 md:text-5xl text-center flex items-center justify-center">
           Graphic Editor
         </h1>
       </header>

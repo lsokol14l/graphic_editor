@@ -4,8 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "check-deps": "bun install",
     "dev": "vite",
+    "dev:checked": "bun run check-deps && bun run dev",
     "build": "vite build",
+    "build:checked": "bun run check-deps && bun run build",
     "preview": "vite preview"
   },
   "dependencies": {

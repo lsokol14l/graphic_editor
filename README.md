@@ -64,18 +64,17 @@
 ## Требования
 
 1. JDK 21
-2. Node.js + npm
+2. Bun
 3. Gradle Wrapper
 
 Проверка:
 
 ```powershell
 java -version
-node -v
-npm -v
+bun --version
 ```
 
-Если PowerShell блокирует `npm`, используйте `npm.cmd`.
+Если `bun` не найден, установите Bun: https://bun.sh
 
 ## Запуск
 
@@ -88,8 +87,8 @@ npm -v
 
 Во время `build` автоматически выполняется:
 
-1. `npm install` в [frontend](frontend)
-2. `npm run build` в [frontend](frontend)
+1. `bun install` в [frontend](frontend) (выполняется инкрементально, если зависимости не менялись)
+2. `bun run build` в [frontend](frontend)
 3. очистка [src/main/resources/static](src/main/resources/static)
 4. копирование `frontend/dist` в [src/main/resources/static](src/main/resources/static)
 
@@ -111,6 +110,13 @@ Frontend:
 cd frontend
 npm install
 npm run dev
+```
+
+или через Bun:
+
+```powershell
+bun install
+bun run dev
 ```
 
 Адреса:
@@ -204,8 +210,8 @@ $$
 1. `Unsupported class file major version 69`
    1. Убедитесь, что используется JDK 21
    2. Выполните `clean` перед сборкой
-2. `npm` не запускается в PowerShell
-   1. Используйте `npm.cmd`
+2. `bun` не запускается в PowerShell
+   1. Убедитесь, что Bun установлен и добавлен в PATH
 3. Ошибка по `modes/opacities`
    1. Количество значений должно совпадать с количеством `images`
 
