@@ -281,34 +281,6 @@ export default {
       this.imageStatus = { type: 'success', message: 'Изображение загружено' }
     },
 
-    calculateHistogram() {
-      if (!this.originalImageFile) return
-
-      const formData = new FormData()
-      formData.append('image', this.originalImageFile)
-
-      return fetch('http://localhost:8080/api/histogram/calculate', {
-        method: 'POST',
-        body: formData
-      })
-        .then(async response => {
-          if (!response.ok) {
-            throw new Error('Не удалось вычислить гистограмму')
-          }
-
-          this.histogramData = await response.json()
-          this.$nextTick(() => {
-            this.drawHistogram()
-          })
-        })
-        .catch(() => {
-          this.imageStatus = {
-            type: 'error',
-            message: 'Не удалось вычислить гистограмму'
-          }
-        })
-    },
-
     initTransformationCurve() {
       this.transformationPoints = [
         { x: 0, y: 0 },

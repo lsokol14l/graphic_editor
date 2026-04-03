@@ -169,74 +169,113 @@ public class HistogramController {
     return clamp((int) Math.round(outputValue), 0, 255);
   }
 
-  private int cubicInterpolate(int inputValue, List<TransformationPoint> points) {
-    int count = points.size();
-    if (count < 3) {
-      return linearInterpolate(inputValue, points);
+  private int cubicInterpolate(double inputValue, List<TransformationPoint> points) {
+    int n = points.size();
+
+    if (n < 2) {
+      throw new IllegalArgumentException("At least 2 points required");
     }
 
-    double[] x = new double[count];
-    double[] y = new double[count];
-    double[] h = new double[count - 1];
+    if (n < 3) {
+      return linearInterpolate((int) inputValue, points);
+    }
 
-    for (int i = 0; i < count; i++) {
+    double[] x = new double[n];
+    double[] y = new double[n];
+
+    for (int i = 0; i < n; i++) {
       x[i] = points.get(i).x();
       y[i] = points.get(i).y();
-      if (i < count - 1) {
-        h[i] = Math.max(1.0, x[i + 1] - x[i]);
+    }
+
+    // Проверка: x должны быть строго возрастающими
+    for (int i = 0; i < n - 1; i++) {
+      if (x[i + 1] <= x[i]) {
+        throw new IllegalArgumentException("x values must be strictly increasing");
       }
     }
 
-    double[] alpha = new double[count];
-    for (int i = 1; i < count - 1; i++) {
-      alpha[i] = (3.0 / h[i]) * (y[i + 1] - y[i]) - (3.0 / h[i - 1]) * (y[i] - y[i - 1]);
+    double[] h = new double[n - 1];
+    for (int i = 0; i < n - 1; i++) {
+      h[i] = x[i + 1] - x[i];
     }
 
-    double[] l = new double[count];
-    double[] mu = new double[count];
-    double[] z = new double[count];
-    double[] c = new double[count];
-    double[] b = new double[count - 1];
-    double[] d = new double[count - 1];
+    double[] alpha = new double[n];
+    for (int i = 1; i < n - 1; i++) {
+      alpha[i] = (3.0 / h[i]) * (y[i + 1] - y[i]) -
+          (3.0 / h[i - 1]) * (y[i] - y[i - 1]);
+    }
+
+    double[] l = new double[n];
+    double[] mu = new double[n];
+    double[] z = new double[n];
 
     l[0] = 1.0;
     mu[0] = 0.0;
     z[0] = 0.0;
 
-    for (int i = 1; i < count - 1; i++) {
+    for (int i = 1; i < n - 1; i++) {
       l[i] = 2.0 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
-      if (l[i] == 0.0) {
-        l[i] = 1.0;
+
+      if (Math.abs(l[i]) < 1e-12) {
+        throw new IllegalStateException("Degenerate spline system");
       }
+
       mu[i] = h[i] / l[i];
       z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
     }
 
-    l[count - 1] = 1.0;
-    z[count - 1] = 0.0;
-    c[count - 1] = 0.0;
+    l[n - 1] = 1.0;
+    z[n - 1] = 0.0;
 
-    for (int j = count - 2; j >= 0; j--) {
+    double[] c = new double[n];
+    double[] b = new double[n - 1];
+    double[] d = new double[n - 1];
+
+    c[n - 1] = 0.0;
+
+    for (int j = n - 2; j >= 0; j--) {
       c[j] = z[j] - mu[j] * c[j + 1];
-      b[j] = (y[j + 1] - y[j]) / h[j] - (h[j] * (c[j + 1] + 2.0 * c[j])) / 3.0;
+      b[j] = (y[j + 1] - y[j]) / h[j] -
+          (h[j] * (2.0 * c[j] + c[j + 1])) / 3.0;
       d[j] = (c[j + 1] - c[j]) / (3.0 * h[j]);
     }
 
-    int interval = count - 2;
-    for (int i = 0; i < count - 1; i++) {
-      if (inputValue <= x[i + 1]) {
-        interval = i;
+    // Обработка выхода за границы (без экстраполяции)
+    if (inputValue <= x[0]) {
+      return clamp((int) Math.round(y[0]), 0, 255);
+    }
+    if (inputValue >= x[n - 1]) {
+      return clamp((int) Math.round(y[n - 1]), 0, 255);
+    }
+
+    // Бинарный поиск интервала
+    int left = 0;
+    int right = n - 1;
+
+    while (left <= right) {
+      int mid = (left + right) / 2;
+
+      if (inputValue < x[mid]) {
+        right = mid - 1;
+      } else if (inputValue > x[mid + 1]) {
+        left = mid + 1;
+      } else {
+        left = mid;
         break;
       }
     }
 
-    double deltaX = inputValue - x[interval];
-    double outputValue = y[interval]
-        + b[interval] * deltaX
-        + c[interval] * deltaX * deltaX
-        + d[interval] * deltaX * deltaX * deltaX;
+    int i = left;
 
-    return clamp((int) Math.round(outputValue), 0, 255);
+    double dx = inputValue - x[i];
+
+    double result = y[i] +
+        b[i] * dx +
+        c[i] * dx * dx +
+        d[i] * dx * dx * dx;
+
+    return clamp((int) Math.round(result), 0, 255);
   }
 
   private HistogramData calculateHistogramFromImage(BufferedImage image) {
