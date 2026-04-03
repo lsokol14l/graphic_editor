@@ -47,3 +47,6 @@ bin/
 
 ### Node Modules ###
 node_modules/
+
+### Task ###
+*.pdf
