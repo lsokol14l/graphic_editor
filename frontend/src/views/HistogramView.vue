@@ -185,6 +185,8 @@ export default {
         return
       }
 
+      this.processedImageSrc = null
+
       if (!file.type.startsWith('image/')) {
         this.imageStatus = {
           type: 'error',
@@ -414,16 +416,9 @@ export default {
 
       // Применяем преобразование
       for (let i = 0; i < data.length; i += 4) {
-        const r = data[i]
-        const g = data[i + 1]
-        const b = data[i + 2]
-
-        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
-        const transformed = this.getTransformedValue(gray)
-
-        data[i] = transformed
-        data[i + 1] = transformed
-        data[i + 2] = transformed
+        data[i] = this.getTransformedValue(data[i])
+        data[i + 1] = this.getTransformedValue(data[i + 1])
+        data[i + 2] = this.getTransformedValue(data[i + 2])
       }
 
       ctx.putImageData(imageData, 0, 0)
@@ -445,7 +440,10 @@ export default {
       let max = 0
 
       for (let i = 0; i < transformedData.length; i += 4) {
-        const gray = transformedData[i]
+        const r = transformedData[i]
+        const g = transformedData[i + 1]
+        const b = transformedData[i + 2]
+        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
 
         histogram[gray]++
         sum += gray
