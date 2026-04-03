@@ -1,7 +1,14 @@
 package by.michael.api;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Comparator;
+import java.util.List;
 import javax.imageio.ImageIO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +21,12 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/histogram")
 public class HistogramController {
 
+  private final ObjectMapper objectMapper;
+
+  public HistogramController(ObjectMapper objectMapper) {
+    this.objectMapper = objectMapper;
+  }
+
   @PostMapping("/calculate")
   public ResponseEntity<HistogramData> calculateHistogram(
       @RequestParam("image") MultipartFile imageFile) {
@@ -23,54 +36,207 @@ public class HistogramController {
         return ResponseEntity.badRequest().build();
       }
 
-      HistogramData data = calculateHistogramFromImage(image);
-      return ResponseEntity.ok(data);
+      return ResponseEntity.ok(calculateHistogramFromImage(image));
     } catch (IOException e) {
       return ResponseEntity.internalServerError().build();
     }
   }
 
   @PostMapping("/transform")
-  public ResponseEntity<byte[]> applyGradationalTransformation(
+  public ResponseEntity<TransformationResponse> applyGradationalTransformation(
       @RequestParam("image") MultipartFile imageFile,
-      @RequestParam(value = "transformation", required = false) String transformationJson) {
+      @RequestParam("points") String pointsJson,
+      @RequestParam(value = "mode", defaultValue = "linear") String mode) {
     try {
       BufferedImage image = ImageIO.read(imageFile.getInputStream());
       if (image == null) {
         return ResponseEntity.badRequest().build();
       }
 
-      BufferedImage result = applyTransformation(image);
-      return ResponseEntity.ok(bufferedImageToBytes(result));
+      List<TransformationPoint> points = parsePoints(pointsJson);
+      BufferedImage result = applyTransformation(image, points, mode);
+      HistogramData histogram = calculateHistogramFromImage(result);
+
+      return ResponseEntity.ok(
+          new TransformationResponse(bufferedImageToDataUrl(result), histogram));
     } catch (IOException e) {
       return ResponseEntity.internalServerError().build();
     }
   }
 
-  private BufferedImage applyTransformation(BufferedImage image) {
+  private BufferedImage applyTransformation(
+      BufferedImage image, List<TransformationPoint> points, String mode) {
     int width = image.getWidth();
     int height = image.getHeight();
-    BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+    BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+
+    List<TransformationPoint> normalizedPoints = normalizePoints(points);
+    boolean useCubic = "cubic".equalsIgnoreCase(mode) && normalizedPoints.size() >= 3;
 
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
         int argb = image.getRGB(x, y);
-        int r = (argb >> 16) & 0xFF;
-        int g = (argb >> 8) & 0xFF;
-        int b = argb & 0xFF;
+        int alpha = (argb >> 24) & 0xFF;
+        int red = (argb >> 16) & 0xFF;
+        int green = (argb >> 8) & 0xFF;
+        int blue = argb & 0xFF;
 
-        int gray = (int) Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-        result.setRGB(x, y, (gray << 16) | (gray << 8) | gray);
+        int transformedRed = transformValue(red, normalizedPoints, useCubic);
+        int transformedGreen = transformValue(green, normalizedPoints, useCubic);
+        int transformedBlue = transformValue(blue, normalizedPoints, useCubic);
+
+        int transformedArgb = (alpha << 24) | (transformedRed << 16) | (transformedGreen << 8) | transformedBlue;
+        result.setRGB(x, y, transformedArgb);
       }
     }
 
     return result;
   }
 
-  private byte[] bufferedImageToBytes(BufferedImage image) throws IOException {
-    java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+  private String bufferedImageToDataUrl(BufferedImage image) throws IOException {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     ImageIO.write(image, "png", outputStream);
-    return outputStream.toByteArray();
+    return "data:image/png;base64,"
+        + Base64.getEncoder().encodeToString(outputStream.toByteArray());
+  }
+
+  private List<TransformationPoint> parsePoints(String pointsJson) throws IOException {
+    TransformationPoint[] parsed = objectMapper.readValue(pointsJson, new TypeReference<TransformationPoint[]>() {
+    });
+    List<TransformationPoint> points = new ArrayList<>();
+    for (TransformationPoint point : parsed) {
+      points.add(new TransformationPoint(clamp(point.x(), 0, 255), clamp(point.y(), 0, 255)));
+    }
+    return points;
+  }
+
+  private List<TransformationPoint> normalizePoints(List<TransformationPoint> inputPoints) {
+    List<TransformationPoint> points = new ArrayList<>(inputPoints);
+    points.sort(Comparator.comparingInt(TransformationPoint::x));
+
+    List<TransformationPoint> uniquePoints = new ArrayList<>();
+    for (TransformationPoint point : points) {
+      if (!uniquePoints.isEmpty() && uniquePoints.get(uniquePoints.size() - 1).x() == point.x()) {
+        uniquePoints.set(uniquePoints.size() - 1, point);
+      } else {
+        uniquePoints.add(point);
+      }
+    }
+
+    if (uniquePoints.isEmpty()) {
+      uniquePoints.add(new TransformationPoint(0, 0));
+      uniquePoints.add(new TransformationPoint(255, 255));
+      return uniquePoints;
+    }
+
+    if (uniquePoints.get(0).x() != 0) {
+      uniquePoints.add(0, new TransformationPoint(0, uniquePoints.get(0).y()));
+    }
+    if (uniquePoints.get(uniquePoints.size() - 1).x() != 255) {
+      uniquePoints.add(
+          new TransformationPoint(255, uniquePoints.get(uniquePoints.size() - 1).y()));
+    }
+
+    return uniquePoints;
+  }
+
+  private int transformValue(int inputValue, List<TransformationPoint> points, boolean useCubic) {
+    if (points.isEmpty()) {
+      return inputValue;
+    }
+
+    if (useCubic) {
+      return cubicInterpolate(inputValue, points);
+    }
+
+    return linearInterpolate(inputValue, points);
+  }
+
+  private int linearInterpolate(int inputValue, List<TransformationPoint> points) {
+    TransformationPoint lower = points.get(0);
+    TransformationPoint upper = points.get(points.size() - 1);
+
+    for (int i = 0; i < points.size() - 1; i++) {
+      if (points.get(i).x() <= inputValue && inputValue <= points.get(i + 1).x()) {
+        lower = points.get(i);
+        upper = points.get(i + 1);
+        break;
+      }
+    }
+
+    double t = (double) (inputValue - lower.x()) / Math.max(1, upper.x() - lower.x());
+    double outputValue = lower.y() + t * (upper.y() - lower.y());
+    return clamp((int) Math.round(outputValue), 0, 255);
+  }
+
+  private int cubicInterpolate(int inputValue, List<TransformationPoint> points) {
+    int count = points.size();
+    if (count < 3) {
+      return linearInterpolate(inputValue, points);
+    }
+
+    double[] x = new double[count];
+    double[] y = new double[count];
+    double[] h = new double[count - 1];
+
+    for (int i = 0; i < count; i++) {
+      x[i] = points.get(i).x();
+      y[i] = points.get(i).y();
+      if (i < count - 1) {
+        h[i] = Math.max(1.0, x[i + 1] - x[i]);
+      }
+    }
+
+    double[] alpha = new double[count];
+    for (int i = 1; i < count - 1; i++) {
+      alpha[i] = (3.0 / h[i]) * (y[i + 1] - y[i]) - (3.0 / h[i - 1]) * (y[i] - y[i - 1]);
+    }
+
+    double[] l = new double[count];
+    double[] mu = new double[count];
+    double[] z = new double[count];
+    double[] c = new double[count];
+    double[] b = new double[count - 1];
+    double[] d = new double[count - 1];
+
+    l[0] = 1.0;
+    mu[0] = 0.0;
+    z[0] = 0.0;
+
+    for (int i = 1; i < count - 1; i++) {
+      l[i] = 2.0 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
+      if (l[i] == 0.0) {
+        l[i] = 1.0;
+      }
+      mu[i] = h[i] / l[i];
+      z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
+    }
+
+    l[count - 1] = 1.0;
+    z[count - 1] = 0.0;
+    c[count - 1] = 0.0;
+
+    for (int j = count - 2; j >= 0; j--) {
+      c[j] = z[j] - mu[j] * c[j + 1];
+      b[j] = (y[j + 1] - y[j]) / h[j] - (h[j] * (c[j + 1] + 2.0 * c[j])) / 3.0;
+      d[j] = (c[j + 1] - c[j]) / (3.0 * h[j]);
+    }
+
+    int interval = count - 2;
+    for (int i = 0; i < count - 1; i++) {
+      if (inputValue <= x[i + 1]) {
+        interval = i;
+        break;
+      }
+    }
+
+    double deltaX = inputValue - x[interval];
+    double outputValue = y[interval]
+        + b[interval] * deltaX
+        + c[interval] * deltaX * deltaX
+        + d[interval] * deltaX * deltaX * deltaX;
+
+    return clamp((int) Math.round(outputValue), 0, 255);
   }
 
   private HistogramData calculateHistogramFromImage(BufferedImage image) {
@@ -85,21 +251,22 @@ public class HistogramController {
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
         int argb = image.getRGB(x, y);
-        int r = (argb >> 16) & 0xFF;
-        int g = (argb >> 8) & 0xFF;
-        int b = argb & 0xFF;
+        int red = (argb >> 16) & 0xFF;
+        int green = (argb >> 8) & 0xFF;
+        int blue = argb & 0xFF;
 
-        // RGB to grayscale: Y = 0.299*R + 0.587*G + 0.114*B
-        int gray = (int) Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        int gray = (int) Math.round(0.299 * red + 0.587 * green + 0.114 * blue);
 
         histogram[gray]++;
         sum += gray;
         sumSquares += gray * gray;
 
-        if (gray < min)
+        if (gray < min) {
           min = gray;
-        if (gray > max)
+        }
+        if (gray > max) {
           max = gray;
+        }
       }
     }
 
@@ -110,19 +277,16 @@ public class HistogramController {
     return new HistogramData(histogram, min, max, mean, variance);
   }
 
-  public static class HistogramData {
-    public int[] histogram;
-    public int min;
-    public int max;
-    public int mean;
-    public int variance;
+  private int clamp(int value, int min, int max) {
+    return Math.max(min, Math.min(max, value));
+  }
 
-    public HistogramData(int[] histogram, int min, int max, int mean, int variance) {
-      this.histogram = histogram;
-      this.min = min;
-      this.max = max;
-      this.mean = mean;
-      this.variance = variance;
-    }
+  public record TransformationPoint(int x, int y) {
+  }
+
+  public record HistogramData(int[] histogram, int min, int max, int mean, int variance) {
+  }
+
+  public record TransformationResponse(String imageDataUrl, HistogramData histogram) {
   }
 }

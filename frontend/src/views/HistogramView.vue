@@ -217,6 +217,7 @@ export default {
       histogramData: null,
       selectedFileName: '',
       imageStatus: null,
+      originalImageFile: null,
       originalImage: null,
       transformationPoints: [],
       interpolationMode: 'linear',
@@ -255,6 +256,7 @@ export default {
 
       this.processedImageSrc = null
       this.selectedFileName = file.name
+      this.originalImageFile = file
 
       if (!file.type.startsWith('image/')) {
         this.imageStatus = {
@@ -270,7 +272,6 @@ export default {
         const img = new Image()
         img.onload = () => {
           this.originalImage = img
-          this.calculateHistogram()
           this.initTransformationCurve()
         }
         img.src = e.target.result
@@ -281,46 +282,31 @@ export default {
     },
 
     calculateHistogram() {
-      if (!this.originalImage) return
+      if (!this.originalImageFile) return
 
-      const canvas = document.createElement('canvas')
-      canvas.width = this.originalImage.width
-      canvas.height = this.originalImage.height
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(this.originalImage, 0, 0)
+      const formData = new FormData()
+      formData.append('image', this.originalImageFile)
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const data = imageData.data
-
-      const histogram = new Array(256).fill(0)
-      let sum = 0
-      let sumSquares = 0
-      let min = 255
-      let max = 0
-
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i]
-        const g = data[i + 1]
-        const b = data[i + 2]
-        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
-
-        histogram[gray]++
-        sum += gray
-        sumSquares += gray * gray
-
-        if (gray < min) min = gray
-        if (gray > max) max = gray
-      }
-
-      const pixelCount = data.length / 4
-      const mean = Math.round(sum / pixelCount)
-      const variance = Math.round(sumSquares / pixelCount - mean * mean)
-
-      this.histogramData = { histogram, min, max, mean, variance }
-
-      this.$nextTick(() => {
-        this.drawHistogram()
+      return fetch('http://localhost:8080/api/histogram/calculate', {
+        method: 'POST',
+        body: formData
       })
+        .then(async response => {
+          if (!response.ok) {
+            throw new Error('Не удалось вычислить гистограмму')
+          }
+
+          this.histogramData = await response.json()
+          this.$nextTick(() => {
+            this.drawHistogram()
+          })
+        })
+        .catch(() => {
+          this.imageStatus = {
+            type: 'error',
+            message: 'Не удалось вычислить гистограмму'
+          }
+        })
     },
 
     initTransformationCurve() {
@@ -560,6 +546,7 @@ export default {
       this.originalImageSrc = null
       this.processedImageSrc = null
       this.originalImage = null
+      this.originalImageFile = null
       this.histogramData = null
       this.selectedFileName = ''
       this.imageStatus = null
@@ -578,70 +565,40 @@ export default {
     },
 
     applyTransformation() {
-      if (!this.originalImage) return
-      const canvas = document.createElement('canvas')
-      canvas.width = this.originalImage.width
-      canvas.height = this.originalImage.height
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(this.originalImage, 0, 0)
+      if (!this.originalImageFile) return
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const data = imageData.data
+      this.isProcessing = true
 
-      // Применяем преобразование
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = this.getTransformedValue(data[i])
-        data[i + 1] = this.getTransformedValue(data[i + 1])
-        data[i + 2] = this.getTransformedValue(data[i + 2])
-      }
+      const formData = new FormData()
+      formData.append('image', this.originalImageFile)
+      formData.append('points', JSON.stringify(this.transformationPoints))
+      formData.append('mode', this.interpolationMode)
 
-      ctx.putImageData(imageData, 0, 0)
-      this.processedImageSrc = canvas.toDataURL()
-
-      // Обновляем гистограмму после преобразования
-      const transformedImageData = ctx.getImageData(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      )
-      const transformedData = transformedImageData.data
-
-      const histogram = new Array(256).fill(0)
-      let sum = 0
-      let sumSquares = 0
-      let min = 255
-      let max = 0
-
-      for (let i = 0; i < transformedData.length; i += 4) {
-        const r = transformedData[i]
-        const g = transformedData[i + 1]
-        const b = transformedData[i + 2]
-        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
-
-        histogram[gray]++
-        sum += gray
-        sumSquares += gray * gray
-
-        if (gray < min) min = gray
-        if (gray > max) max = gray
-      }
-
-      const pixelCount = transformedData.length / 4
-      const mean = Math.round(sum / pixelCount)
-      const variance = Math.round(sumSquares / pixelCount - mean * mean)
-
-      this.histogramData = {
-        histogram,
-        min,
-        max,
-        mean,
-        variance
-      }
-
-      this.$nextTick(() => {
-        this.drawHistogram()
+      return fetch('http://localhost:8080/api/histogram/transform', {
+        method: 'POST',
+        body: formData
       })
+        .then(async response => {
+          if (!response.ok) {
+            throw new Error('Не удалось применить преобразование')
+          }
+
+          const data = await response.json()
+          this.processedImageSrc = data.imageDataUrl
+          this.histogramData = data.histogram
+          this.$nextTick(() => {
+            this.drawHistogram()
+          })
+        })
+        .catch(() => {
+          this.imageStatus = {
+            type: 'error',
+            message: 'Не удалось применить преобразование'
+          }
+        })
+        .finally(() => {
+          this.isProcessing = false
+        })
     },
 
     drawHistogram() {
