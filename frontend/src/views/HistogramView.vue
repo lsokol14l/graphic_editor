@@ -117,16 +117,30 @@
           <div
             class="rounded-2xl border border-orange-500/40 bg-slate-900/80 p-6 shadow-soft flex flex-col"
           >
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-lg font-semibold text-orange-300">
-                Функция преобразования
-              </h2>
-              <button
-                @click="resetTransformationCurve"
-                class="px-3 py-1 rounded-lg bg-orange-600/40 hover:bg-orange-600/60 text-orange-300 text-sm transition"
-              >
-                Сброс
-              </button>
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-semibold text-orange-300">
+                  Функция преобразования
+                </h2>
+                <p class="mt-1 text-xs text-slate-400">
+                  Выберите способ интерполяции для кривой
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <select
+                  v-model="interpolationMode"
+                  class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-orange-400"
+                >
+                  <option value="linear">Линейная</option>
+                  <option value="cubic">Кубическая</option>
+                </select>
+                <button
+                  @click="resetTransformationCurve"
+                  class="px-3 py-1 rounded-lg bg-orange-600/40 hover:bg-orange-600/60 text-orange-300 text-sm transition"
+                >
+                  Сброс
+                </button>
+              </div>
             </div>
             <div
               class="flex-1 bg-white rounded-lg overflow-hidden min-h-96 cursor-crosshair"
@@ -205,6 +219,7 @@ export default {
       imageStatus: null,
       originalImage: null,
       transformationPoints: [],
+      interpolationMode: 'linear',
       isProcessing: false
     }
   },
@@ -216,6 +231,14 @@ export default {
         }
       },
       deep: true
+    },
+    interpolationMode() {
+      if (this.originalImage) {
+        this.drawTransformationCurve()
+        this.applyTransformation()
+      } else {
+        this.drawTransformationCurve()
+      }
     }
   },
   methods: {
@@ -424,6 +447,13 @@ export default {
     getTransformedValue(inputValue) {
       if (this.transformationPoints.length === 0) return inputValue
 
+      if (
+        this.interpolationMode === 'cubic' &&
+        this.transformationPoints.length >= 3
+      ) {
+        return this.getCubicTransformedValue(inputValue)
+      }
+
       let lower = this.transformationPoints[0]
       let upper =
         this.transformationPoints[this.transformationPoints.length - 1]
@@ -441,6 +471,73 @@ export default {
 
       const t = (inputValue - lower.x) / (upper.x - lower.x || 1)
       const outputValue = lower.y + t * (upper.y - lower.y)
+
+      return Math.max(0, Math.min(255, Math.round(outputValue)))
+    },
+
+    getCubicTransformedValue(inputValue) {
+      const points = this.transformationPoints
+      const count = points.length
+
+      if (count < 3) {
+        return this.getTransformedValue(inputValue)
+      }
+
+      const x = points.map(point => point.x)
+      const y = points.map(point => point.y)
+      const h = []
+      for (let i = 0; i < count - 1; i++) {
+        h.push(Math.max(1, x[i + 1] - x[i]))
+      }
+
+      const alpha = new Array(count).fill(0)
+      for (let i = 1; i < count - 1; i++) {
+        alpha[i] =
+          (3 / h[i]) * (y[i + 1] - y[i]) - (3 / h[i - 1]) * (y[i] - y[i - 1])
+      }
+
+      const l = new Array(count).fill(0)
+      const mu = new Array(count).fill(0)
+      const z = new Array(count).fill(0)
+      const c = new Array(count).fill(0)
+      const b = new Array(count - 1).fill(0)
+      const d = new Array(count - 1).fill(0)
+
+      l[0] = 1
+      mu[0] = 0
+      z[0] = 0
+
+      for (let i = 1; i < count - 1; i++) {
+        l[i] = 2 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1]
+        if (l[i] === 0) l[i] = 1
+        mu[i] = h[i] / l[i]
+        z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i]
+      }
+
+      l[count - 1] = 1
+      z[count - 1] = 0
+      c[count - 1] = 0
+
+      for (let j = count - 2; j >= 0; j--) {
+        c[j] = z[j] - mu[j] * c[j + 1]
+        b[j] = (y[j + 1] - y[j]) / h[j] - (h[j] * (c[j + 1] + 2 * c[j])) / 3
+        d[j] = (c[j + 1] - c[j]) / (3 * h[j])
+      }
+
+      let interval = count - 2
+      for (let i = 0; i < count - 1; i++) {
+        if (inputValue <= x[i + 1]) {
+          interval = i
+          break
+        }
+      }
+
+      const deltaX = inputValue - x[interval]
+      const outputValue =
+        y[interval] +
+        b[interval] * deltaX +
+        c[interval] * deltaX * deltaX +
+        d[interval] * deltaX * deltaX * deltaX
 
       return Math.max(0, Math.min(255, Math.round(outputValue)))
     },
