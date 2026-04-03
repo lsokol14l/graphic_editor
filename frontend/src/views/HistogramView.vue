@@ -39,11 +39,26 @@
               >Загрузить изображение</span
             >
             <input
+              ref="fileInput"
               type="file"
               accept="image/*"
               @change="handleImageUpload"
-              class="w-full px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/90 text-slate-100 cursor-pointer hover:border-cyan-400 transition"
+              class="hidden"
             />
+            <div
+              class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/90 px-3 py-2"
+            >
+              <button
+                type="button"
+                @click="openFileDialog"
+                class="inline-flex items-center rounded-lg border border-cyan-500/60 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-200 transition hover:bg-cyan-500/30"
+              >
+                Выбрать файл
+              </button>
+              <span class="text-sm text-slate-300 truncate">
+                {{ selectedFileName || 'Файл не выбран' }}
+              </span>
+            </div>
           </label>
           <p
             v-if="imageStatus"
@@ -186,6 +201,7 @@ export default {
       originalImageSrc: null,
       processedImageSrc: null,
       histogramData: null,
+      selectedFileName: '',
       imageStatus: null,
       originalImage: null,
       transformationPoints: [],
@@ -203,6 +219,10 @@ export default {
     }
   },
   methods: {
+    openFileDialog() {
+      this.$refs.fileInput?.click()
+    },
+
     async handleImageUpload(event) {
       const file = event.target.files?.[0]
       if (!file) {
@@ -211,6 +231,7 @@ export default {
       }
 
       this.processedImageSrc = null
+      this.selectedFileName = file.name
 
       if (!file.type.startsWith('image/')) {
         this.imageStatus = {
@@ -434,7 +455,7 @@ export default {
 
       const link = document.createElement('a')
       link.href = imageUrl
-      link.download = `histogram_result_${Date.now()}.png`
+      link.download = 'image.png'
       link.click()
     },
 
@@ -443,11 +464,16 @@ export default {
       this.processedImageSrc = null
       this.originalImage = null
       this.histogramData = null
+      this.selectedFileName = ''
       this.imageStatus = null
       this.transformationPoints = [
         { x: 0, y: 0 },
         { x: 255, y: 255 }
       ]
+
+      if (this.$refs.fileInput) {
+        this.$refs.fileInput.value = ''
+      }
 
       this.$nextTick(() => {
         this.drawTransformationCurve()
