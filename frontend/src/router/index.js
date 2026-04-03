@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import ImageRedactorView from '../views/ImageRedactorView.vue'
 import GradationalTransformationsView from '../views/GradationalTransformationsView.vue'
+import HistogramView from '../views/HistogramView.vue'
 
 const routes = [
   {
@@ -18,6 +19,11 @@ const routes = [
     path: '/gradational-transformations',
     name: 'gradational-transformations',
     component: GradationalTransformationsView
+  },
+  {
+    path: '/histogram',
+    name: 'histogram',
+    component: HistogramView
   }
 ]
 
